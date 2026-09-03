@@ -5,6 +5,7 @@ import { ShoppingBag, Sparkles, Zap, MapPin, Clock, CheckCircle2, ChevronRight, 
 import { fetchApi, formatFiat, formatSats } from '../../lib/api';
 import { RfqModal } from '../../components/RfqModal';
 import { LightningModal } from '../../components/LightningModal';
+import { ReceiptModal } from '../../components/ReceiptModal';
 
 export default function BuyerPage() {
   const [activeTab, setActiveTab] = useState<'catalog' | 'rfq' | 'orders'>('catalog');
@@ -13,6 +14,7 @@ export default function BuyerPage() {
   const [rfqs, setRfqs] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [selectedRfqOffers, setSelectedRfqOffers] = useState<any>(null);
+  const [selectedReceiptOrder, setSelectedReceiptOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Modals state
@@ -396,7 +398,7 @@ export default function BuyerPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
                   <div className="text-right">
                     <div className="text-base font-black text-amber-400 font-mono">
                       {ord.totalSats > 0 ? formatSats(ord.totalSats) : formatFiat(ord.totalFiat)}
@@ -406,13 +408,21 @@ export default function BuyerPage() {
                     </div>
                   </div>
 
-                  {ord.status === 'PENDING_PAYMENT' && (
+                  {ord.status === 'PENDING_PAYMENT' ? (
                     <button
                       onClick={() => setActiveCheckoutOrderId(ord.id)}
                       className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs shadow-lg shadow-amber-500/20 transition"
                     >
                       <Zap className="h-3.5 w-3.5" />
                       <span>Pay Lightning</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setSelectedReceiptOrder(ord)}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs border border-stone-700 transition"
+                    >
+                      <FileText className="h-3.5 w-3.5 text-amber-400" />
+                      <span>View Receipt</span>
                     </button>
                   )}
                 </div>
@@ -445,6 +455,14 @@ export default function BuyerPage() {
             loadData();
             setActiveTab('orders');
           }}
+        />
+      )}
+
+      {/* Printable Receipt Modal */}
+      {selectedReceiptOrder && (
+        <ReceiptModal
+          order={selectedReceiptOrder}
+          onClose={() => setSelectedReceiptOrder(null)}
         />
       )}
     </div>
