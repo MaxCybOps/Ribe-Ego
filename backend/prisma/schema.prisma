@@ -1,0 +1,333 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  BUYER
+  SELLER_ADMIN
+  LOCATION_STAFF
+  PLATFORM_ADMIN
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+enum PayoutMethod {
+  LIGHTNING_ADDRESS
+  BITCOIN_ONCHAIN
+  FIAT_OFFRAMP
+}
+
+enum LocationType {
+  STORE
+  WAREHOUSE
+}
+
+enum UnitOfMeasure {
+  PIECE
+  BAG
+  LENGTH
+  ROLL
+  CARTON
+  SQM
+}
+
+enum StockMovementType {
+  STOCK_IN
+  STOCK_OUT_ORDER
+  ADJUSTMENT
+  RETURN
+}
+
+enum RfqStatus {
+  OPEN
+  AWARDED
+  EXPIRED
+  CANCELLED
+}
+
+enum OfferStatus {
+  SUBMITTED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum OrderOrigin {
+  DIRECT_CATALOG
+  RFQ_NEGOTIATED
+}
+
+enum FulfillmentType {
+  PICKUP
+  SELLER_DELIVERY
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  PREPARING
+  READY
+  COMPLETED
+  DISPUTED
+  CANCELLED
+}
+
+enum TransactionStatus {
+  UNPAID
+  EXPIRED
+  SETTLED
+}
+
+enum SettlementStatus {
+  HELD_IN_PLATFORM
+  READY_FOR_PAYOUT
+  PAID_OUT
+  DISPUTE_HOLD
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  HELD
+}
+
+model User {
+  id             String         @id @default(uuid())
+  email          String         @unique
+  phoneNumber    String?
+  name           String
+  role           String         @default("BUYER") // BUYER, SELLER_ADMIN, LOCATION_STAFF, PLATFORM_ADMIN
+  sellerId       String?
+  seller         Seller?        @relation(fields: [sellerId], references: [id], onDelete: SetNull)
+  locationId     String?
+  location       Location?      @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  requests       Request[]
+  orders         Order[]
+}
+
+model Seller {
+  id                 String              @id @default(uuid())
+  businessName       String
+  contactEmail       String
+  contactPhone       String
+  verificationStatus String              @default("PENDING") // PENDING, VERIFIED, REJECTED, SUSPENDED
+  verificationNotes  String?
+  commissionRate     Float               @default(0.07) // Default 7% take-rate (5-10% range)
+  payoutMethod       String              @default("LIGHTNING_ADDRESS") // LIGHTNING_ADDRESS, BITCOIN_ONCHAIN, FIAT_OFFRAMP
+  payoutDestination  String?             // Lightning address (user@domain), Bitcoin on-chain bc1..., or bank account details JSON
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  users              User[]
+  locations          Location[]
+  offers             Offer[]
+  orders             Order[]
+  payouts            Payout[]
+}
+
+model Location {
+  id                 String              @id @default(uuid())
+  sellerId           String
+  seller             Seller              @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  name               String              // e.g. "Main Market Storefront", "Depot Warehouse B"
+  type               String              @default("STORE") // STORE, WAREHOUSE
+  address            String
+  city               String
+  latitude           Float?
+  longitude          Float?
+  contactPhone       String
+  operatingHours     String?
+  isVerified         Boolean             @default(false)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  users              User[]
+  products           Product[]
+  stockMovements     StockMovement[]
+  offers             Offer[]
+  orders             Order[]
+  commissionSplits   CommissionSplit[]
+}
+
+model Product {
+  id                 String              @id @default(uuid())
+  locationId         String
+  location           Location            @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  title              String              // e.g. "Dangote 3X 42.5R Cement"
+  category           String              // BUILDING_MATERIALS, PLUMBING_ELECTRICAL, TOOLS_EQUIPMENT, HARDWARE_FASTENERS, OTHER
+  description        String?
+  unitOfMeasure      String              @default("PIECE") // PIECE, BAG, LENGTH, ROLL, CARTON, SQM
+  currentUnitPriceFiat Float             // Fiat unit price (e.g. NGN / USD)
+  currentStock       Int                 @default(0)
+  isActive           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  stockMovements     StockMovement[]
+  priceHistory       PriceHistory[]
+  orderItems         OrderItem[]
+}
+
+model StockMovement {
+  id                 String              @id @default(uuid())
+  productId          String
+  product            Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  locationId         String
+  location           Location            @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  type               String              // STOCK_IN, STOCK_OUT_ORDER, ADJUSTMENT, RETURN
+  quantityDelta      Int                 // Positive for in, negative for out
+  balanceAfter       Int
+  referenceId        String?             // e.g. Order ID, Goods Received Voucher, Stock-in Batch ID
+  notes              String?
+  createdAt          DateTime            @default(now())
+}
+
+model PriceHistory {
+  id                 String              @id @default(uuid())
+  productId          String
+  product            Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  unitPriceFiat      Float
+  effectiveFrom      DateTime            @default(now())
+  changedBy          String?
+}
+
+model Request {
+  id                     String          @id @default(uuid())
+  buyerId                String
+  buyer                  User            @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  title                  String          // Item or specification requested
+  category               String
+  quantity               Int
+  unitOfMeasure          String          @default("PIECE")
+  targetDeliveryLocation String?
+  deliveryPreference     String          @default("PICKUP") // PICKUP, SELLER_DELIVERY
+  deadline               DateTime?
+  status                 String          @default("OPEN") // OPEN, AWARDED, EXPIRED, CANCELLED
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  offers                 Offer[]
+}
+
+model Offer {
+  id                     String          @id @default(uuid())
+  requestId              String
+  request                Request         @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  sellerId               String
+  seller                 Seller          @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  locationId             String
+  location               Location        @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  unitPriceFiat          Float
+  totalPriceFiat         Float
+  estimatedLeadTimeHours Int             // Estimated fulfillment hours
+  notes                  String?
+  validUntil             DateTime
+  status                 String          @default("SUBMITTED") // SUBMITTED, ACCEPTED, REJECTED, EXPIRED
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  orders                 Order[]
+}
+
+model Order {
+  id                 String              @id @default(uuid())
+  orderNumber        String              @unique
+  originType         String              @default("DIRECT_CATALOG") // DIRECT_CATALOG, RFQ_NEGOTIATED
+  originOfferId      String?
+  originOffer        Offer?              @relation(fields: [originOfferId], references: [id], onDelete: SetNull)
+  buyerId            String
+  buyer              User                @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId           String
+  seller             Seller              @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  locationId         String
+  location           Location            @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  fulfillmentType    String              @default("PICKUP") // PICKUP, SELLER_DELIVERY
+  deliveryAddress    String?
+  totalFiat          Float
+  totalSats          Int
+  exchangeRate       Float               // Fiat per BTC locked at invoice creation
+  status             String              @default("PENDING_PAYMENT") // PENDING_PAYMENT, PAID, PREPARING, READY, COMPLETED, DISPUTED, CANCELLED
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  items              OrderItem[]
+  transaction        Transaction?
+  commissionSplit    CommissionSplit?
+}
+
+model OrderItem {
+  id                 String              @id @default(uuid())
+  orderId            String
+  order              Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId          String?
+  product            Product?            @relation(fields: [productId], references: [id], onDelete: SetNull)
+  itemTitle          String
+  unitOfMeasure      String
+  quantity           Int
+  unitPriceFiat      Float
+  totalPriceFiat     Float
+}
+
+model Transaction {
+  id                 String              @id @default(uuid())
+  orderId            String              @unique
+  order              Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  paymentHash        String              @unique
+  paymentRequest     String              // Lightning bolt11 invoice / URI
+  amountSats         Int
+  amountFiat         Float
+  rateLockedUntil    DateTime
+  preimage           String?
+  status             String              @default("UNPAID") // UNPAID, EXPIRED, SETTLED
+  settledAt          DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  commissionSplit    CommissionSplit?
+}
+
+model CommissionSplit {
+  id                 String              @id @default(uuid())
+  transactionId      String              @unique
+  transaction        Transaction         @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  orderId            String              @unique
+  order              Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  locationId         String
+  location           Location            @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  grossSats          Int
+  commissionRate     Float               // e.g. 0.07 (7%)
+  commissionSats     Int
+  sellerNetSats      Int
+  settlementStatus   String              @default("HELD_IN_PLATFORM") // HELD_IN_PLATFORM, READY_FOR_PAYOUT, PAID_OUT, DISPUTE_HOLD
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+}
+
+model Payout {
+  id                 String              @id @default(uuid())
+  sellerId           String
+  seller             Seller              @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  amountSats         Int
+  amountFiat         Float?
+  method             String              // LIGHTNING_ADDRESS, BITCOIN_ONCHAIN, FIAT_OFFRAMP
+  destination        String              // Destination address or account
+  status             String              @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED, HELD
+  txHash             String?             // On-chain txid or Lightning payment preimage or off-ramp transfer ref
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+}
