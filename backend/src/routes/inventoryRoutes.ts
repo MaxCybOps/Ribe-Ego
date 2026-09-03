@@ -52,3 +52,17 @@ inventoryRouter.get('/location/:locationId/ledger', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// Bulk import inventory from CSV
+inventoryRouter.post('/import-csv', async (req, res) => {
+  try {
+    const { locationId, csvContent, recordedBy } = req.body;
+    if (!locationId || !csvContent) {
+      return res.status(400).json({ success: false, error: 'locationId and csvContent are required' });
+    }
+    const products = await InventoryService.importCsv(locationId, csvContent, recordedBy);
+    res.json({ success: true, count: products.length, data: products });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
