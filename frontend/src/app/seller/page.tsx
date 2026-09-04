@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Store, Layers, PlusCircle, Sparkles, Zap, DollarSign, Send, CheckCircle2, MapPin, Clock, RefreshCw, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Store, Layers, PlusCircle, Sparkles, Zap, DollarSign, Send, CheckCircle2, MapPin, Clock, RefreshCw, AlertCircle, Upload, ShieldCheck } from 'lucide-react';
 import { fetchApi, formatFiat, formatSats, WS_BASE } from '../../lib/api';
 
 export default function SellerPage() {
@@ -25,6 +25,14 @@ export default function SellerPage() {
 
   // RFQ quote state
   const [quotePrices, setQuotePrices] = useState<Record<string, { unitPrice: number; leadHours: number; notes: string }>>({});
+
+  // Warehouse Pickup PIN verification state (keyed by orderId)
+  const [pickupInputPins, setPickupInputPins] = useState<Record<string, string>>({});
+
+  // CSV bulk import state
+  const [csvImporting, setCsvImporting] = useState(false);
+  const [csvResult, setCsvResult] = useState<string | null>(null);
+  const csvFileRef = useRef<HTMLInputElement>(null);
 
   // 1. Initial Load: Oga Musa
   const loadSellerData = async () => {
@@ -136,7 +144,49 @@ export default function SellerPage() {
     }
   };
 
+  // Verify Warehouse Pickup PIN — marks order COMPLETED on match
+  const handleVerifyPickupPin = async (orderId: string) => {
+    const pin = pickupInputPins[orderId]?.trim();
+    if (!pin || pin.length !== 6) {
+      alert('Please enter the 6-digit pickup verification PIN');
+      return;
+    }
+    try {
+      await fetchApi(`/orders/${orderId}/verify-pickup`, {
+        method: 'POST',
+        body: JSON.stringify({ pin, verifiedBy: seller?.id }),
+      });
+      setPickupInputPins((prev) => ({ ...prev, [orderId]: '' }));
+      loadLocationData(activeLocationId);
+    } catch (err: any) {
+      alert(`PIN verification failed: ${err.message}`);
+    }
+  };
+
+  // CSV Bulk Inventory Import
+  const handleCsvImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeLocationId) return;
+    setCsvImporting(true);
+    setCsvResult(null);
+    try {
+      const csvContent = await file.text();
+      const res = await fetchApi('/inventory/import-csv', {
+        method: 'POST',
+        body: JSON.stringify({ locationId: activeLocationId, csvContent, recordedBy: seller?.id }),
+      });
+      setCsvResult(`✓ Imported ${res.count} product(s) from CSV`);
+      loadLocationData(activeLocationId);
+    } catch (err: any) {
+      setCsvResult(`✗ Import failed: ${err.message}`);
+    } finally {
+      setCsvImporting(false);
+      if (csvFileRef.current) csvFileRef.current.value = '';
+    }
+  };
+
   const activeLoc = locations.find((l) => l.id === activeLocationId);
+
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -245,12 +295,43 @@ export default function SellerPage() {
       {/* Tab 1: Inventory & Stock Movements */}
       {activeTab === 'inventory' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-stone-200">
-              Active Stock at <span className="text-emerald-400">{activeLoc?.name}</span>
-            </h3>
-            <p className="text-xs text-stone-400">Automatic stock-out deducts on confirmed payment</p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-stone-200">
+                Active Stock at <span className="text-emerald-400">{activeLoc?.name}</span>
+              </h3>
+              <p className="text-xs text-stone-400">Automatic stock-out deducts on confirmed payment</p>
+            </div>
+
+            {/* CSV Bulk Import Control */}
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 border border-stone-700 text-xs font-bold text-stone-200 cursor-pointer transition">
+                <Upload className="h-3.5 w-3.5 text-amber-400" />
+                <span>{csvImporting ? 'Importing…' : 'Import CSV'}</span>
+                <input
+                  ref={csvFileRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={handleCsvImport}
+                  disabled={csvImporting}
+                />
+              </label>
+            </div>
           </div>
+
+          {/* CSV result toast */}
+          {csvResult && (
+            <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold border ${
+              csvResult.startsWith('✓')
+                ? 'bg-emerald-950/50 border-emerald-800 text-emerald-400'
+                : 'bg-red-950/50 border-red-800 text-red-400'
+            }`}>
+              {csvResult.startsWith('✓') ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+              <span>{csvResult}</span>
+              <button className="ml-auto text-stone-400 hover:text-stone-200" onClick={() => setCsvResult(null)}>✕</button>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {inventory.map((item) => (
@@ -258,6 +339,7 @@ export default function SellerPage() {
                 key={item.id}
                 className="rounded-2xl border border-stone-800 bg-stone-900/60 p-5 flex flex-col justify-between"
               >
+
                 <div>
                   <div className="flex items-center justify-between text-xs mb-2">
                     <span className="text-stone-400 uppercase font-mono">{item.category}</span>
@@ -464,7 +546,7 @@ export default function SellerPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <div className="text-right">
                   <div className="text-base font-black text-amber-400 font-mono">
                     {ord.totalSats > 0 ? formatSats(ord.totalSats) : formatFiat(ord.totalFiat)}
@@ -474,7 +556,29 @@ export default function SellerPage() {
                   </div>
                 </div>
 
-                {/* Fulfillment Status Toggle */}
+                {/* Warehouse Pickup Verification PIN Flow */}
+                {ord.fulfillmentType === 'PICKUP' && ord.status !== 'COMPLETED' && (
+                  <div className="flex items-center gap-1.5 bg-stone-950 p-1.5 rounded-xl border border-stone-800">
+                    <input
+                      type="text"
+                      maxLength={6}
+                      placeholder="6-digit PIN"
+                      value={pickupInputPins[ord.id] || ''}
+                      onChange={(e) =>
+                        setPickupInputPins({ ...pickupInputPins, [ord.id]: e.target.value })
+                      }
+                      className="w-24 text-center font-mono font-bold text-xs bg-stone-900 border border-stone-700 rounded-lg px-2 py-1.5 text-amber-400 focus:outline-none focus:border-amber-500"
+                    />
+                    <button
+                      onClick={() => handleVerifyPickupPin(ord.id)}
+                      className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs rounded-lg shadow-sm"
+                    >
+                      Verify Release
+                    </button>
+                  </div>
+                )}
+
+                {/* Fulfillment Status Toggle for Non-Pickup or Standard Flow */}
                 {ord.status === 'PAID' && (
                   <button
                     onClick={() => handleUpdateOrderStatus(ord.id, 'PREPARING')}
@@ -488,16 +592,21 @@ export default function SellerPage() {
                     onClick={() => handleUpdateOrderStatus(ord.id, 'READY')}
                     className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-stone-950"
                   >
-                    Mark Ready for Pickup
+                    Mark Ready
                   </button>
                 )}
-                {ord.status === 'READY' && (
+                {ord.status === 'READY' && ord.fulfillmentType !== 'PICKUP' && (
                   <button
                     onClick={() => handleUpdateOrderStatus(ord.id, 'COMPLETED')}
                     className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-xs font-bold text-stone-950"
                   >
                     Complete Order
                   </button>
+                )}
+                {ord.status === 'COMPLETED' && (
+                  <span className="text-xs text-emerald-400 font-bold px-2 py-1 bg-emerald-950/60 rounded border border-emerald-800">
+                    ✓ Handed Over
+                  </span>
                 )}
               </div>
             </div>
