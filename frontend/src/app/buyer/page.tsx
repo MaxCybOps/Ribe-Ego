@@ -3,14 +3,19 @@
 import React, { useState, useEffect } from 'react';
 import { ShoppingBag, Sparkles, Zap, MapPin, Clock, CheckCircle2, ChevronRight, RefreshCw, FileText, ArrowRight } from 'lucide-react';
 import { fetchApi, formatFiat, formatSats } from '../../lib/api';
+import { calculateDistanceKm } from '../../lib/geo';
 import { RfqModal } from '../../components/RfqModal';
 import { LightningModal } from '../../components/LightningModal';
 import { ReceiptModal } from '../../components/ReceiptModal';
+
+// Mock buyer coordinates (e.g., Ikeja, Lagos) for Haversine distance
+const BUYER_COORDS = { lat: 6.6018, lon: 3.3515 };
 
 export default function BuyerPage() {
   const [activeTab, setActiveTab] = useState<'catalog' | 'rfq' | 'orders'>('catalog');
   const [buyer, setBuyer] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
+
   const [rfqs, setRfqs] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [selectedRfqOffers, setSelectedRfqOffers] = useState<any>(null);
@@ -197,9 +202,19 @@ export default function BuyerPage() {
 
                 {/* Location Badge */}
                 <div className="mt-4 p-2.5 rounded-xl bg-stone-950/80 border border-stone-800/80 text-xs">
-                  <div className="flex items-center gap-1.5 text-stone-300 font-medium">
-                    <MapPin className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-                    <span>{prod.location?.name}</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-stone-300 font-medium">
+                      <MapPin className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                      <span>{prod.location?.name}</span>
+                    </div>
+                    {prod.location?.latitude && prod.location?.longitude && (
+                      <span className="text-[10px] font-mono text-emerald-400">
+                        {calculateDistanceKm(
+                          BUYER_COORDS.lat, BUYER_COORDS.lon,
+                          prod.location.latitude, prod.location.longitude
+                        )} km
+                      </span>
+                    )}
                   </div>
                   <div className="text-[11px] text-stone-500 mt-0.5 pl-5">
                     {prod.location?.seller?.businessName} • Stock: {prod.currentStock} {prod.unitOfMeasure.toLowerCase()}s
@@ -315,10 +330,20 @@ export default function BuyerPage() {
                                 </span>
                               </div>
                               <p className="text-xs text-stone-400">{offer.seller?.businessName}</p>
-                              <p className="text-xs text-stone-500 flex items-center gap-1 mt-1">
-                                <MapPin className="h-3 w-3 text-amber-400" />
-                                <span>{offer.location?.address}, {offer.location?.city}</span>
-                              </p>
+                              <div className="text-xs text-stone-500 flex items-center justify-between mt-1">
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="h-3 w-3 text-amber-400" />
+                                  {offer.location?.address}, {offer.location?.city}
+                                </span>
+                                {offer.location?.latitude && offer.location?.longitude && (
+                                  <span className="font-mono text-emerald-400">
+                                    {calculateDistanceKm(
+                                      BUYER_COORDS.lat, BUYER_COORDS.lon,
+                                      offer.location.latitude, offer.location.longitude
+                                    )} km away
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-xs text-stone-400 flex items-center gap-1 mt-1">
                                 <Clock className="h-3 w-3 text-amber-400" />
                                 <span>Lead Time: ~{offer.estimatedLeadTimeHours} hours</span>
