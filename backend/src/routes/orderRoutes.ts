@@ -113,6 +113,47 @@ orderRouter.patch('/:id/status', async (req, res) => {
   }
 });
 
+// Verify 6-digit pickup release PIN at warehouse
+orderRouter.post('/:id/verify-pickup', async (req, res) => {
+  try {
+    const { pickupPin, verifiedBy } = req.body;
+    if (!pickupPin) return res.status(400).json({ success: false, error: 'Pickup PIN is required' });
+
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id },
+      include: { seller: true, location: true },
+    });
+
+    if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
+    if (!order.pickupPin) return res.status(400).json({ success: false, error: 'No pickup PIN issued for this order' });
+
+    if (order.pickupPin.trim() !== pickupPin.toString().trim()) {
+      return res.status(400).json({ success: false, error: 'Invalid Pickup PIN' });
+    }
+
+    const updatedOrder = await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        status: 'COMPLETED',
+        pickupVerifiedAt: new Date(),
+        pickupVerifiedBy: verifiedBy || 'Warehouse Staff',
+      },
+      include: { seller: true, location: true },
+    });
+
+    wsManager.broadcast({
+      type: 'ORDER_STATUS_CHANGED',
+      payload: updatedOrder,
+      targetBuyerId: updatedOrder.buyerId,
+      targetLocationId: updatedOrder.locationId,
+    });
+
+    res.json({ success: true, message: 'Pickup PIN verified. Goods released.', data: updatedOrder });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 // List orders for a specific seller location
 orderRouter.get('/location/:locationId', async (req, res) => {
   try {

@@ -125,11 +125,16 @@ export class PaymentService {
         },
       });
 
-      // 2. Mark order as PAID and PREPARING
+      // 2. Mark order as PAID, generate 6-digit release PIN if pickup
+      const pickupPin = transaction.order.fulfillmentType === 'PICKUP'
+        ? Math.floor(100000 + Math.random() * 900000).toString()
+        : null;
+
       const updatedOrder = await tx.order.update({
         where: { id: transaction.orderId },
         data: {
           status: 'PAID',
+          pickupPin,
         },
       });
 

@@ -261,6 +261,9 @@ model Order {
   totalFiat          Float
   totalSats          Int
   exchangeRate       Float               // Fiat per BTC locked at invoice creation
+  pickupPin          String?             // 6-digit secure release PIN for warehouse pickup
+  pickupVerifiedAt   DateTime?
+  pickupVerifiedBy   String?
   status             String              @default("PENDING_PAYMENT") // PENDING_PAYMENT, PAID, PREPARING, READY, COMPLETED, DISPUTED, CANCELLED
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt

@@ -226,13 +226,34 @@ export class InventoryService {
   }
 
   /**
-   * Get full audit stock movements for a location
+   * Bulk CSV import for a specific location
+   * Format: title,category,description,unitOfMeasure,unitPriceFiat,initialStock
    */
-  static async getLocationStockLedger(locationId: string) {
-    return await prisma.stockMovement.findMany({
-      where: { locationId },
-      include: { product: true },
-      orderBy: { createdAt: 'desc' },
-    });
+  static async importCsv(locationId: string, csvContent: string, recordedBy: string = 'CSV Import') {
+    const lines = csvContent.trim().split('\n');
+    if (lines.length < 2) throw new Error('CSV must contain a header and at least one data row');
+
+    const createdProducts = [];
+    // Skip header line
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const [title, category, description, unitOfMeasure, unitPriceFiatStr, initialStockStr] = line.split(',');
+      if (!title || !category || !unitPriceFiatStr) continue;
+
+      const product = await this.createProduct({
+        locationId,
+        title: title.trim(),
+        category: category.trim(),
+        description: description?.trim() || '',
+        unitOfMeasure: (unitOfMeasure?.trim().toUpperCase() as any) || 'PIECE',
+        initialUnitPriceFiat: parseFloat(unitPriceFiatStr.trim()),
+        initialStock: parseInt(initialStockStr?.trim() || '0', 10),
+        recordedBy,
+      });
+      createdProducts.push(product);
+    }
+    return createdProducts;
   }
 }
