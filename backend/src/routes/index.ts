@@ -6,6 +6,7 @@ import { rfqRouter } from './rfqRoutes.js';
 import { orderRouter } from './orderRoutes.js';
 import { paymentRouter } from './paymentRoutes.js';
 import { adminRouter } from './adminRoutes.js';
+import { sellerRouter } from './sellerRoutes.js';
 
 export const apiRouter = Router();
 
@@ -16,3 +17,4 @@ apiRouter.use('/rfq', rfqRouter);
 apiRouter.use('/orders', orderRouter);
 apiRouter.use('/payments', paymentRouter);
 apiRouter.use('/admin', adminRouter);
+apiRouter.use('/sellers', sellerRouter);
