@@ -290,6 +290,18 @@ export default function SellerPage() {
           <DollarSign className="h-4 w-4" />
           <span>Settlement & Payouts</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('settings' as any)}
+          className={`pb-3 text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 transition whitespace-nowrap ${
+            activeTab === ('settings' as any)
+              ? 'border-emerald-400 text-emerald-400'
+              : 'border-transparent text-stone-400 hover:text-stone-200'
+          }`}
+        >
+          <ShieldCheck className="h-4 w-4" />
+          <span>Settings & Locations</span>
+        </button>
       </div>
 
       {/* Tab 1: Inventory & Stock Movements */}
@@ -715,6 +727,171 @@ export default function SellerPage() {
           </div>
         </div>
       )}
+
+      {/* Tab 5: Settings & Locations */}
+      {activeTab === ('settings' as any) && (
+        <div className="space-y-6">
+          {/* Business Info */}
+          <div className="rounded-2xl border border-stone-800 bg-stone-900/60 p-6">
+            <h3 className="text-sm font-bold text-stone-200 mb-4 flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-emerald-400" />
+              Business & Verification Status
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+              <div>
+                <div className="text-stone-400 mb-1">Business Name</div>
+                <div className="font-bold text-stone-100">{seller?.businessName}</div>
+              </div>
+              <div>
+                <div className="text-stone-400 mb-1">Contact Email</div>
+                <div className="font-bold text-stone-100">{seller?.contactEmail}</div>
+              </div>
+              <div>
+                <div className="text-stone-400 mb-1">Verification Status</div>
+                <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold font-mono ${
+                  seller?.verificationStatus === 'VERIFIED'
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                }`}>
+                  {seller?.verificationStatus}
+                </span>
+              </div>
+              <div>
+                <div className="text-stone-400 mb-1">Commission Rate</div>
+                <div className="font-bold text-amber-400 font-mono">{((seller?.commissionRate || 0.07) * 100).toFixed(0)}%</div>
+              </div>
+            </div>
+          </div>
+
+          {/* My Locations */}
+          <div className="rounded-2xl border border-stone-800 bg-stone-900/60 p-6">
+            <h3 className="text-sm font-bold text-stone-200 mb-4 flex items-center gap-2">
+              <Store className="h-4 w-4 text-emerald-400" />
+              My Physical Locations ({locations.length})
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {locations.map((loc) => (
+                <div key={loc.id} className="p-4 rounded-xl bg-stone-950 border border-stone-800">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-bold text-stone-100 text-sm">{loc.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-800 text-stone-400 font-mono">{loc.type}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
+                        loc.isVerified ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                      }`}>
+                        {loc.isVerified ? '✓ Verified' : 'Pending'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-xs text-stone-500">{loc.address}, {loc.city}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Add New Location */}
+            <AddLocationForm sellerId={seller?.id} onAdded={loadSellerData} />
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+// ─── Add New Location Form ───────────────────────────────────────────────────
+
+function AddLocationForm({ sellerId, onAdded }: { sellerId: string; onAdded: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [type, setType] = useState<'STORE' | 'WAREHOUSE'>('STORE');
+  const [address, setAddress] = useState('');
+  const [city, setCity] = useState('');
+  const [phone, setPhone] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sellerId) return;
+    setSaving(true);
+    try {
+      await fetchApi(`/sellers/${sellerId}/locations`, {
+        method: 'POST',
+        body: JSON.stringify({ name, type, address, city, contactPhone: phone }),
+      });
+      setOpen(false);
+      setName(''); setAddress(''); setCity(''); setPhone('');
+      onAdded();
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-bold border border-stone-700 transition"
+      >
+        <PlusCircle className="h-4 w-4 text-emerald-400" />
+        Add New Location / Warehouse
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-4 p-4 rounded-xl bg-stone-950 border border-stone-700 space-y-3">
+      <h4 className="text-sm font-bold text-stone-100">Add New Location</h4>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-stone-400 mb-1">Location Name</label>
+          <input
+            required value={name} onChange={e => setName(e.target.value)}
+            placeholder="e.g. Alaba Depot Warehouse"
+            className="w-full rounded-lg bg-stone-900 border border-stone-700 px-3 py-2 text-xs text-stone-100 focus:border-emerald-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-stone-400 mb-1">Type</label>
+          <select
+            value={type} onChange={e => setType(e.target.value as any)}
+            className="w-full rounded-lg bg-stone-900 border border-stone-700 px-3 py-2 text-xs text-stone-100 focus:border-emerald-500 focus:outline-none"
+          >
+            <option value="STORE">STORE</option>
+            <option value="WAREHOUSE">WAREHOUSE</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-stone-400 mb-1">Street Address</label>
+          <input
+            required value={address} onChange={e => setAddress(e.target.value)}
+            placeholder="e.g. 14 Eko Road"
+            className="w-full rounded-lg bg-stone-900 border border-stone-700 px-3 py-2 text-xs text-stone-100 focus:border-emerald-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-stone-400 mb-1">City</label>
+          <input
+            required value={city} onChange={e => setCity(e.target.value)}
+            placeholder="e.g. Lagos"
+            className="w-full rounded-lg bg-stone-900 border border-stone-700 px-3 py-2 text-xs text-stone-100 focus:border-emerald-500 focus:outline-none"
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-xs text-stone-400 mb-1">Contact Phone</label>
+          <input
+            required value={phone} onChange={e => setPhone(e.target.value)}
+            placeholder="+234 800 000 0000"
+            className="w-full rounded-lg bg-stone-900 border border-stone-700 px-3 py-2 text-xs text-stone-100 focus:border-emerald-500 focus:outline-none"
+          />
+        </div>
+      </div>
+      <div className="flex justify-end gap-3 pt-2">
+        <button type="button" onClick={() => setOpen(false)} className="text-xs text-stone-400 font-semibold px-3 py-1.5">Cancel</button>
+        <button type="submit" disabled={saving} className="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-stone-950 text-xs font-bold">
+          {saving ? 'Submitting…' : 'Submit for Verification'}
+        </button>
+      </div>
+    </form>
   );
 }
