@@ -6,21 +6,24 @@ import { fetchApi, formatFiat, formatSats } from '../../lib/api';
 
 export default function AdminPage() {
   const [stats, setStats] = useState<any>(null);
+  const [rfqHealth, setRfqHealth] = useState<any>(null);
   const [ledger, setLedger] = useState<any[]>([]);
   const [sellers, setSellers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'ledger' | 'sellers' | 'liquidity'>('ledger');
+  const [activeTab, setActiveTab] = useState<'ledger' | 'verification' | 'disputes'>('ledger');
 
   const loadAdminData = async () => {
     try {
       setLoading(true);
-      const [platformStats, ledgerEntries, sellerList] = await Promise.all([
+      const [platformStats, healthStats, ledgerEntries, sellerList] = await Promise.all([
         fetchApi('/admin/stats'),
+        fetchApi('/admin/kpi/rfq-health'),
         fetchApi('/admin/ledger'),
         fetchApi('/admin/sellers'),
       ]);
 
       setStats(platformStats);
+      setRfqHealth(healthStats);
       setLedger(ledgerEntries);
       setSellers(sellerList);
       setLoading(false);
@@ -103,26 +106,26 @@ export default function AdminPage() {
         </div>
 
         <div className="p-4 rounded-2xl border border-stone-800 bg-stone-900/60">
-          <div className="text-xs text-stone-400 font-medium">RFQ Match Rate</div>
+          <div className="text-xs text-stone-400 font-medium">RFQ Negotiation Health</div>
           <div className="text-xl font-black text-purple-400 mt-1 font-mono">
-            {stats?.rfqMatchRate || '0%'}
+            ~{rfqHealth?.avgTimeToFirstOfferMinutes || 0} min
           </div>
           <div className="text-[11px] text-stone-500 mt-0.5">
-            {stats?.awardedRfqs || 0} awarded / {stats?.totalRfqs || 0} posted
+            {rfqHealth?.rfqsWithOffers || 0} RFQs got offers (avg {rfqHealth?.avgOffersPerRfq || 0} each)
           </div>
         </div>
 
         <div className="p-4 rounded-2xl border border-stone-800 bg-stone-900/60">
-          <div className="text-xs text-stone-400 font-medium">Active Locations</div>
-          <div className="text-xl font-black text-stone-100 mt-1 font-mono">
-            {stats?.totalLocations || 0} Stores / Depots
+          <div className="text-xs text-stone-400 font-medium">Verification Backlog</div>
+          <div className="text-xl font-black text-amber-400 mt-1 font-mono">
+            {sellers.filter(s => s.verificationStatus === 'PENDING').length} Sellers
           </div>
-          <div className="text-[11px] text-stone-500 mt-0.5">{stats?.totalSellers || 0} verified sellers</div>
+          <div className="text-[11px] text-stone-500 mt-0.5">Awaiting manual approval</div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-stone-800 mb-6 gap-2 sm:gap-6">
+      <div className="flex border-b border-stone-800 mb-6 gap-2 sm:gap-6 overflow-x-auto">
         <button
           onClick={() => setActiveTab('ledger')}
           className={`pb-3 text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 transition ${
@@ -139,32 +142,33 @@ export default function AdminPage() {
         </button>
 
         <button
-          onClick={() => setActiveTab('sellers')}
+          onClick={() => setActiveTab('verification')}
           className={`pb-3 text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 transition ${
-            activeTab === 'sellers'
+            activeTab === 'verification'
               ? 'border-purple-400 text-purple-400'
               : 'border-transparent text-stone-400 hover:text-stone-200'
           }`}
         >
-          <Store className="h-4 w-4" />
-          <span>Sellers & Locations Verification</span>
+          <ShieldAlert className="h-4 w-4" />
+          <span>Verification Queue</span>
           <span className="text-xs bg-stone-900 px-2 py-0.5 rounded-full text-stone-400 font-mono">
             {sellers.length}
           </span>
         </button>
 
         <button
-          onClick={() => setActiveTab('liquidity')}
+          onClick={() => setActiveTab('disputes')}
           className={`pb-3 text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 transition ${
-            activeTab === 'liquidity'
-              ? 'border-purple-400 text-purple-400'
+            activeTab === 'disputes'
+              ? 'border-red-400 text-red-400'
               : 'border-transparent text-stone-400 hover:text-stone-200'
           }`}
         >
-          <Zap className="h-4 w-4" />
-          <span>Lightning Node & Liquidity</span>
+          <AlertTriangle className="h-4 w-4" />
+          <span>Disputes</span>
         </button>
       </div>
+
 
       {/* Tab 1: Traceable Financial Ledger */}
       {activeTab === 'ledger' && (
@@ -231,9 +235,9 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Tab 2: Seller & Location Verification */}
-      {activeTab === 'sellers' && (
-        <div className="space-y-6">
+      {/* Tab 2: Sellers & Verification Queue */}
+      {activeTab === 'verification' && (
+        <div className="space-y-4">
           {sellers.map((s) => (
             <div key={s.id} className="rounded-2xl border border-stone-800 bg-stone-900/60 p-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-stone-800">
@@ -303,31 +307,15 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Tab 3: Lightning Node Health */}
-      {activeTab === 'liquidity' && (
+      {/* Tab 3: Disputes */}
+      {activeTab === 'disputes' && (
         <div className="rounded-2xl border border-stone-800 bg-stone-900/60 p-6">
           <h3 className="text-base font-bold text-stone-100 mb-4 flex items-center gap-2">
-            <Zap className="h-5 w-5 text-amber-400" />
-            <span>Lightning Provider Infrastructure & Channel Health</span>
+            <AlertTriangle className="h-5 w-5 text-red-400" />
+            <span>Active Disputes Queue</span>
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
-            <div className="p-4 rounded-xl bg-stone-950 border border-stone-800">
-              <span className="text-stone-400">Active Provider</span>
-              <div className="text-base font-bold text-stone-100 mt-1">MockLightningProvider / Polar</div>
-              <div className="text-emerald-400 text-[11px] mt-1">● Online & Responding &lt;10ms</div>
-            </div>
-
-            <div className="p-4 rounded-xl bg-stone-950 border border-stone-800">
-              <span className="text-stone-400">Inbound Channel Liquidity</span>
-              <div className="text-base font-bold text-amber-400 mt-1">100,000,000 sats</div>
-              <div className="text-stone-500 text-[11px] mt-1">Sufficient for wholesale order volumes</div>
-            </div>
-
-            <div className="p-4 rounded-xl bg-stone-950 border border-stone-800">
-              <span className="text-stone-400">Webhook Processing Mode</span>
-              <div className="text-base font-bold text-purple-400 mt-1">Idempotent Atomic Lock</div>
-              <div className="text-emerald-400 text-[11px] mt-1">Zero double-spending guarantee</div>
-            </div>
+          <div className="text-sm text-stone-400">
+            No active disputes. Buyers or Sellers can flag settled orders for Admin review.
           </div>
         </div>
       )}
