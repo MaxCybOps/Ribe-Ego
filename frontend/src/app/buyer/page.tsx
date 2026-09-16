@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ShoppingBag, Sparkles, Zap, MapPin, Clock, CheckCircle2, ChevronRight, RefreshCw, FileText, ArrowRight } from 'lucide-react';
+import { ShoppingBag, Sparkles, Zap, MapPin, Clock, CheckCircle2, ChevronRight, RefreshCw, FileText, ArrowRight, AlertTriangle } from 'lucide-react';
 import { fetchApi, formatFiat, formatSats } from '../../lib/api';
 import { calculateDistanceKm } from '../../lib/geo';
 import { RfqModal } from '../../components/RfqModal';
@@ -70,6 +70,22 @@ export default function BuyerPage() {
       setActiveCheckoutOrderId(order.id);
     } catch (err: any) {
       alert(`Order error: ${err.message}`);
+    }
+  };
+
+  // Flag an order for dispute
+  const handleFlagDispute = async (orderId: string, orderNumber: string) => {
+    const notes = prompt(`Flag order ${orderNumber} for dispute?\n\nDescribe the issue:`);
+    if (!notes) return;
+    try {
+      await fetchApi(`/orders/${orderId}/dispute`, {
+        method: 'POST',
+        body: JSON.stringify({ notes }),
+      });
+      alert('Order flagged for Admin review. Our team will reach out within 24 hours.');
+      loadData();
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
     }
   };
 
@@ -442,13 +458,30 @@ export default function BuyerPage() {
                       <span>Pay Lightning</span>
                     </button>
                   ) : (
-                    <button
-                      onClick={() => setSelectedReceiptOrder(ord)}
-                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs border border-stone-700 transition"
-                    >
-                      <FileText className="h-3.5 w-3.5 text-amber-400" />
-                      <span>View Receipt</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setSelectedReceiptOrder(ord)}
+                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs border border-stone-700 transition"
+                      >
+                        <FileText className="h-3.5 w-3.5 text-amber-400" />
+                        <span>View Receipt</span>
+                      </button>
+                      {(ord.status === 'COMPLETED' || ord.status === 'PAID') && !ord.disputeFlag && (
+                        <button
+                          onClick={() => handleFlagDispute(ord.id, ord.orderNumber)}
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold text-xs border border-red-500/20 transition"
+                          title="Flag order for dispute"
+                        >
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          <span>Flag Issue</span>
+                        </button>
+                      )}
+                      {ord.disputeFlag && (
+                        <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 font-mono">
+                          ⚠ Under Review
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
