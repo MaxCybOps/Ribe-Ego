@@ -256,4 +256,17 @@ export class InventoryService {
     }
     return createdProducts;
   }
+
+  /**
+   * Get all stock movements (ledger) for a specific location
+   */
+  static async getLocationStockLedger(locationId: string) {
+    return await prisma.stockMovement.findMany({
+      where: { locationId },
+      include: {
+        product: { select: { id: true, title: true, unitOfMeasure: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }
