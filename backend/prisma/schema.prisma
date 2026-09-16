@@ -265,6 +265,8 @@ model Order {
   pickupVerifiedAt   DateTime?
   pickupVerifiedBy   String?
   status             String              @default("PENDING_PAYMENT") // PENDING_PAYMENT, PAID, PREPARING, READY, COMPLETED, DISPUTED, CANCELLED
+  disputeFlag        Boolean             @default(false)
+  disputeNotes       String?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
