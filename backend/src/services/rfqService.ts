@@ -86,11 +86,14 @@ export class RfqService {
     if (!rfq) throw new Error('RFQ request not found');
     if (rfq.status !== 'OPEN') throw new Error('RFQ is no longer accepting offers');
 
-    // Verify location belongs to seller
+    // Verify location belongs to seller and both are VERIFIED
     const location = await prisma.location.findFirst({
       where: { id: locationId, sellerId },
+      include: { seller: true }
     });
     if (!location) throw new Error('Invalid location for this seller');
+    if (!location.isVerified) throw new Error('Location is pending Admin verification');
+    if (location.seller.verificationStatus !== 'VERIFIED') throw new Error('Seller business is pending Admin verification');
 
     const totalPriceFiat = parseFloat((unitPriceFiat * rfq.quantity).toFixed(2));
     const validUntil = new Date(Date.now() + validHours * 3600 * 1000);
