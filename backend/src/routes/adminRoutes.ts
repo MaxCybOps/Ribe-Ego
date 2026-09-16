@@ -14,6 +14,16 @@ adminRouter.get('/stats', async (req, res) => {
   }
 });
 
+// Get RFQ Health metrics
+adminRouter.get('/kpi/rfq-health', async (req, res) => {
+  try {
+    const health = await AdminService.getRfqHealth();
+    res.json({ success: true, data: health });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Get platform financial transaction ledger (end-to-end trace)
 adminRouter.get('/ledger', async (req, res) => {
   try {

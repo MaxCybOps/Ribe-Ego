@@ -93,4 +93,41 @@ export class AdminService {
       },
     });
   }
+  /**
+   * Get RFQ health metrics (average response rate, response time)
+   */
+  static async getRfqHealth() {
+    const rfqs = await prisma.request.findMany({
+      include: {
+        offers: true,
+      },
+    });
+
+    let totalOffers = 0;
+    let rfqsWithOffers = 0;
+    let sumTimeToFirstOfferMs = 0;
+
+    for (const rfq of rfqs) {
+      if (rfq.offers.length > 0) {
+        rfqsWithOffers++;
+        totalOffers += rfq.offers.length;
+        
+        // Calculate time to first offer
+        const firstOffer = rfq.offers.reduce((earliest, current) => 
+          current.createdAt < earliest.createdAt ? current : earliest
+        );
+        sumTimeToFirstOfferMs += (firstOffer.createdAt.getTime() - rfq.createdAt.getTime());
+      }
+    }
+
+    const avgTimeToFirstOfferMs = rfqsWithOffers > 0 ? sumTimeToFirstOfferMs / rfqsWithOffers : 0;
+    const avgOffersPerRfq = rfqs.length > 0 ? totalOffers / rfqs.length : 0;
+
+    return {
+      totalRfqs: rfqs.length,
+      rfqsWithOffers,
+      avgOffersPerRfq: avgOffersPerRfq.toFixed(2),
+      avgTimeToFirstOfferMinutes: (avgTimeToFirstOfferMs / (1000 * 60)).toFixed(1),
+    };
+  }
 }
