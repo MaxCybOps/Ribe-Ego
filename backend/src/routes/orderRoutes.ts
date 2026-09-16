@@ -190,3 +190,35 @@ orderRouter.get('/buyer/:buyerId', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// Flag order for dispute
+orderRouter.post('/:id/dispute', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { notes } = req.body;
+
+    const updatedOrder = await prisma.order.update({
+      where: { id },
+      data: {
+        status: 'DISPUTED',
+        disputeFlag: true,
+        disputeNotes: notes,
+      },
+    });
+
+    wsManager.broadcast({
+      type: 'ORDER_STATUS_CHANGED',
+      payload: { orderId: id, status: 'DISPUTED', notes },
+    });
+    
+    // Alert admin — broadcast to all (no specific targetId filter needed)
+    wsManager.broadcast({
+      type: 'ORDER_STATUS_CHANGED',
+      payload: { orderId: id, orderNumber: updatedOrder.orderNumber, status: 'DISPUTED' },
+    });
+
+    res.json({ success: true, data: updatedOrder });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
